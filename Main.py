@@ -6,21 +6,17 @@ st.set_page_config(page_title="Gold SWC Pro Terminal", layout="wide")
 st.title("🔴 XAUUSD Institutional Terminal v2.0")
 
 ticker = "GC=F"
-# Data download karte waqt safety rakhein
 data = yf.download(ticker, period="5d", interval="15m")
 
-# Pehla check: Kya data object empty hai?
+# DATA SAFETY BLOCK
 if data is None or data.empty:
     st.warning("⚠️ Market band hai, data uplabdh nahi hai.")
 else:
-    # Saaf data
     data = data.dropna()
-    
-    # Dusra check: Kya saaf karne ke baad bhi data bacha hai?
     if len(data) < 200:
-        st.warning("⚠️ Data analysis ke liye kam hai (Sunday mode).")
+        st.warning("⚠️ Data analysis ke liye insufficient hai (Monday ko check karein).")
     else:
-        # Ab calculation safe hai
+        # Indentation ka dhayan rakhein: Ye saara code 'else' ke andar hai
         current_price = data['Close'].iloc[-1]
         ema_200 = data['Close'].ewm(span=200, adjust=False).mean().iloc[-1]
         
