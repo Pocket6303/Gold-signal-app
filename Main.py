@@ -4,8 +4,8 @@ import pandas as pd
 import datetime
 import pytz
 
-st.set_page_config(page_title="Gold Institutional Terminal v5.2", layout="wide")
-st.title("🔴 XAUUSD Institutional Terminal v5.2")
+st.set_page_config(page_title="Gold Institutional Terminal v5.3", layout="wide")
+st.title("🔴 XAUUSD Institutional Terminal v5.3")
 
 ist = pytz.timezone('Asia/Kolkata')
 now = datetime.datetime.now(ist)
@@ -23,25 +23,36 @@ except Exception:
 price = float(data['Close'].values[-1])
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
-upper_band = float(data['mid'].values[-1] + (2 * data['std'].values[-1]))
-lower_band = float(data['mid'].values[-1] - (2 * data['std'].values[-1]))
+upper_band = float(data['mid'].values[-1] + (1.8 * data['std'].values[-1]))
+lower_band = float(data['mid'].values[-1] - (1.8 * data['std'].values[-1]))
 
-vol_spike = data['Volume'].values[-1] > (data['Volume'].rolling(20).mean().values[-1] * 1.5)
+vol_spike = data['Volume'].values[-1] > (data['Volume'].rolling(20).mean().values[-1] * 1.2)
 sentiment_bullish = (price > upper_band) and vol_spike
 sentiment_bearish = (price < lower_band) and vol_spike
 
-# Signal Logic
+# Signal & Validity Logic
 if sentiment_bullish:
-    signal, color, sl, tp = "INSTITUTIONAL BUY (Sentiment)", "#22c55e", price - 3.0, price + 9.0
-    display_entry = f"<b>Confirmed Entry:</b> {price:.2f}"
+    # Validity: Agar price bahut upar nikal gaya, to expired
+    if price < (upper_band + 2.0): 
+        signal, color, sl, tp = "INSTITUTIONAL BUY (Sentiment)", "#22c55e", price - 3.0, price + 9.0
+        display_entry = f"<b>Confirmed Entry:</b> {price:.2f}"
+    else:
+        signal, color, sl, tp = "TRADE EXPIRED (Too Late)", "#f59e0b", None, None
+        display_entry = f"<i>Price moved too far: {price:.2f}</i>"
+
 elif sentiment_bearish:
-    signal, color, sl, tp = "INSTITUTIONAL SELL (Sentiment)", "#ef4444", price + 3.0, price - 9.0
-    display_entry = f"<b>Confirmed Entry:</b> {price:.2f}"
+    # Validity: Agar price bahut neeche nikal gaya, to expired
+    if price > (lower_band - 2.0):
+        signal, color, sl, tp = "INSTITUTIONAL SELL (Sentiment)", "#ef4444", price + 3.0, price - 9.0
+        display_entry = f"<b>Confirmed Entry:</b> {price:.2f}"
+    else:
+        signal, color, sl, tp = "TRADE EXPIRED (Too Late)", "#f59e0b", None, None
+        display_entry = f"<i>Price at target level: {price:.2f}</i>"
 else:
     signal, color, sl, tp = "WAITING FOR INSTITUTIONAL SENTIMENT", "#f59e0b", None, None
     display_entry = f"<i>Current Market Price: {price:.2f}</i>"
 
-# UI Display with forced Dark Theme CSS
+# UI Display
 st.markdown(f"""
 <div style="
     background-color: #1e293b; 
@@ -55,7 +66,7 @@ st.markdown(f"""
     <p style="color: #cbd5e1; margin-top: 10px;"><b>Time (IST):</b> {now.strftime('%H:%M:%S')}</p>
     <hr style="border-color: #475569; margin: 20px 0;">
     <p style="font-size: 1.3rem; color: #ffffff;">{display_entry}</p>
-    {f'<p style="color:#ff6b6b; font-size:1.2rem; margin: 5px 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem; margin: 5px 0;"><b>TP:</b> {tp:.2f}</p>' if sl else '<p style="color: #94a3b8; font-style: italic;">Waiting for volatility breakout...</p>'}
-    <p style="color: #64748b; font-size: 0.85rem; margin-top: 20px;">Logic: Price Deviation (Bollinger) + 150% Volume Spike (Institutional Flow)</p>
+    {f'<p style="color:#ff6b6b; font-size:1.2rem; margin: 5px 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem; margin: 5px 0;"><b>TP:</b> {tp:.2f}</p>' if sl else '<p style="color: #94a3b8; font-style: italic;">Waiting for institutional setup...</p>'}
+    <p style="color: #64748b; font-size: 0.85rem; margin-top: 20px;">Logic: Price Deviation + 120% Volume Spike</p>
 </div>
 """, unsafe_allow_html=True)
