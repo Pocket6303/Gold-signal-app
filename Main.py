@@ -4,11 +4,13 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.5", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.5 (NY-Aligned)")
+st.set_page_config(page_title="Institutional Pro v5.6", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.6 (Master Control)")
 
-# Timeframe Selector
+# Sidebar Controls
 tf = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
+force_signal = st.sidebar.checkbox("🚀 Force Active Session (Manual Override)")
+
 ticker = "GC=F"
 
 # Data Fetching
@@ -30,13 +32,12 @@ price = float(data['Close'].iloc[-1])
 data['tr'] = data['High'] - data['Low']
 atr = data['tr'].rolling(14).mean().iloc[-1]
 
-# Automatic Session Logic (NY Timezone + DST Handling)
+# Session Logic
 ny_tz = pytz.timezone('America/New_York')
 now_ny = datetime.now(ny_tz)
 hour_ny = now_ny.hour
-
-# London (03:00-07:00 NY Time) & NY Session (08:00-12:00 NY Time)
-is_session = (3 <= hour_ny < 7) or (8 <= hour_ny < 12)
+# London (3-7) or NY (8-12)
+is_session = (3 <= hour_ny < 7) or (8 <= hour_ny < 12) or force_signal
 
 # Indicators
 data['std'] = data['Close'].rolling(20).std()
@@ -45,14 +46,14 @@ upper_band = float(data['mid'].iloc[-1] + (1.8 * data['std'].iloc[-1]))
 lower_band = float(data['mid'].iloc[-1] - (1.8 * data['std'].iloc[-1]))
 vol_spike = data['Volume'].iloc[-1] > (data['Volume'].rolling(20).mean().iloc[-1] * 1.2)
 
-# Signal Logic
+# Logic
 sentiment_bullish = (price > upper_band) and vol_spike
 sentiment_bearish = (price < lower_band) and vol_spike
 
+# UI
 if not is_session:
     signal, color = "MARKET OUT OF SESSION", "#64748b"
     display_entry = f"<i>NY Time: {now_ny.strftime('%H:%M')} - Waiting for session...</i>"
-    sl, tp = None, None
 else:
     if sentiment_bullish and price < (upper_band + 2.0):
         signal, color = "INSTITUTIONAL BUY (Pro)", "#22c55e"
@@ -67,11 +68,10 @@ else:
         display_entry = f"<i>Market Active | Price: {price:.2f}</i>"
         sl, tp = None, None
 
-# UI Display
 st.markdown(f"""
 <div style="background-color: #1e293b; padding: 25px; border-radius: 15px; border-left: 12px solid {color}; color: #f8fafc;">
     <h1 style="margin:0; color:{color}; font-size: 1.8rem;">{signal}</h1>
-    <p><b>NY Time:</b> {now_ny.strftime('%H:%M:%S')} | <b>TF:</b> {tf}</p>
+    <p><b>NY Time:</b> {now_ny.strftime('%H:%M:%S')} | <b>TF:</b> {tf} {'(Manual Override ON)' if force_signal else ''}</p>
     <hr style="border-color: #475569;">
     <p style="font-size: 1.3rem;">{display_entry}</p>
     {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp:.2f}</p>' if sl else '<p style="color:#94a3b8;">Searching for liquidity...</p>'}
