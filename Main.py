@@ -6,59 +6,46 @@ import datetime
 st.set_page_config(page_title="Gold SWC Pro Terminal", layout="wide")
 st.title("🔴 XAUUSD Institutional Terminal v2.0")
 
-# 1. Weekend Check
-today = datetime.datetime.now().weekday()
-if today >= 5:
-    st.warning("⚠️ Weekend: Market band hai.")
-    st.stop()
+# Current Time
+now = datetime.datetime.now()
 
 ticker = "GC=F"
-
 try:
+    # 5d ka data liya taaki calculations stable rahein
     data = yf.download(ticker, period="5d", interval="15m", progress=False)
-    if data is None or data.empty:
-        st.info("⚠️ Data load ho raha hai...")
-        st.stop()
-    
-    # Fix: Agar multi-index column hai, toh sirf 'Close' aur 'Volume' lein
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
-        
     data = data.dropna()
 except Exception as e:
-    st.error(f"Error: {e}")
+    st.error("Data load karne mein error.")
     st.stop()
 
-# 2. Calculation Fix: .iloc[-1] ke baad direct scalar access
-try:
-    # .item() sirf tab kaam karta hai jab wo single element ho
-    current_price = float(data['Close'].iloc[-1])
-    ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().iloc[-1])
+# Calculations
+current_price = float(data['Close'].values[-1])
+ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().values[-1])
 
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / (loss + 0.00001)
-    rsi = float(rs.iloc[-1])
-    
-    volume = float(data['Volume'].iloc[-1])
-    avg_vol = float(data['Volume'].mean())
+# Signal Logic
+bias = "BULLISH" if current_price > ema_200 else "BEARISH"
 
-    bias = "BULLISH" if current_price > ema_200 else "BEARISH"
-    score = 50
-    if (bias == "BULLISH" and rsi < 65) or (bias == "BEARISH" and rsi > 35): score += 20
-    if volume > avg_vol: score += 20
-    if abs(current_price - ema_200) > 2: score += 10
+# 1:3 Risk-Reward Calculation
+# SL 2 points ka rakha hai, toh TP 6 points ka hoga (1:3 ratio)
+risk_points = 2.0
+reward_points = 6.0
 
-    st.markdown(f"""
-    <div style="background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8;">
-        <h3>Signal: {bias}</h3>
-        <p><b>Accuracy:</b> {score}%</p>
-        <p><b>Price:</b> {current_price:.2f}</p>
-        <p><b>RSI:</b> {rsi:.2f}</p>
-    </div>
-    """, unsafe_allow_html=True)
+if bias == "BULLISH":
+    sl = current_price - risk_points
+    tp = current_price + reward_points
+else:
+    sl = current_price + risk_points
+    tp = current_price - reward_points
 
-except Exception as e:
-    st.error(f"Calculation Error: {e}")
-    
+st.markdown(f"""
+<div style="background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8;">
+    <h2 style="margin:0;">Signal: {bias}</h2>
+    <p style="font-size: 1.2rem; margin: 10px 0;"><b>Time:</b> {now.strftime('%H:%M:%S IST')}</p>
+    <hr style="border: 0.5px solid #475569;">
+    <p style="font-size: 1.2rem; margin: 5px 0;"><b>Entry:</b> {current_price:.2f}</p>
+    <p style="font-size: 1.2rem; margin: 5px 0; color: #ef4444;"><b>SL:</b> {sl:.2f}</p>
+    <p style="font-size: 1.2rem; margin: 5px 0; color: #22c55e;"><b>TP:</b> {tp:.2f}</p>
+</div>
+""", unsafe_allow_html=True)
