@@ -14,36 +14,36 @@ if today >= 5:
 
 ticker = "GC=F"
 
-# 2. Data fetching
 try:
-    data = yf.download(ticker, period="5d", interval="15m", progress=False, threads=False)
-    
+    data = yf.download(ticker, period="5d", interval="15m", progress=False)
     if data is None or data.empty:
-        st.info("⚠️ Data load ho raha hai, wait karein...")
+        st.info("⚠️ Data load ho raha hai...")
         st.stop()
+    
+    # Fix: Agar multi-index column hai, toh sirf 'Close' aur 'Volume' lein
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
         
     data = data.dropna()
 except Exception as e:
     st.error(f"Error: {e}")
     st.stop()
 
-# 3. FIX: Using .values[-1] to ensure we get a single number, not a Series
+# 2. Calculation Fix: .iloc[-1] ke baad direct scalar access
 try:
-    current_price = float(data['Close'].values[-1])
-    ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().values[-1])
+    # .item() sirf tab kaam karta hai jab wo single element ho
+    current_price = float(data['Close'].iloc[-1])
+    ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().iloc[-1])
 
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / (loss + 0.00001)
+    rsi = float(rs.iloc[-1])
     
-    # RSI calculation using .values[-1]
-    rsi = float(rs.values[-1])
-    
-    volume = float(data['Volume'].values[-1])
+    volume = float(data['Volume'].iloc[-1])
     avg_vol = float(data['Volume'].mean())
 
-    # Bias aur Score
     bias = "BULLISH" if current_price > ema_200 else "BEARISH"
     score = 50
     if (bias == "BULLISH" and rsi < 65) or (bias == "BEARISH" and rsi > 35): score += 20
@@ -53,8 +53,8 @@ try:
     st.markdown(f"""
     <div style="background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8;">
         <h3>Signal: {bias}</h3>
-        <p><b>Accuracy Confidence:</b> {score}%</p>
-        <p><b>Entry Price:</b> {current_price:.2f}</p>
+        <p><b>Accuracy:</b> {score}%</p>
+        <p><b>Price:</b> {current_price:.2f}</p>
         <p><b>RSI:</b> {rsi:.2f}</p>
     </div>
     """, unsafe_allow_html=True)
