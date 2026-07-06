@@ -6,6 +6,7 @@ import datetime
 st.set_page_config(page_title="Gold SWC Pro Terminal", layout="wide")
 st.title("🔴 XAUUSD Institutional Terminal v2.0")
 
+# 1. Weekend Check
 today = datetime.datetime.now().weekday()
 if today >= 5:
     st.warning("⚠️ Weekend: Market band hai.")
@@ -13,8 +14,8 @@ if today >= 5:
 
 ticker = "GC=F"
 
+# 2. Data fetching
 try:
-    # 'threads=False' aur 'progress=False' stability badhate hain
     data = yf.download(ticker, period="5d", interval="15m", progress=False, threads=False)
     
     if data is None or data.empty:
@@ -26,23 +27,23 @@ except Exception as e:
     st.error(f"Error: {e}")
     st.stop()
 
-# --- YAHAN HUA HAI FIX ---
-# .iloc[-1] ke baad .item() zaroori hai agar wo Series hai
-# Agar .item() kaam na kare, toh float() ka use .values[-1] ke sath karenge
+# 3. FIX: Using .values[-1] to ensure we get a single number, not a Series
 try:
-    # Pandas Series se value nikalne ka sabse safe tarika
-    current_price = float(data['Close'].iloc[-1])
-    ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().iloc[-1])
+    current_price = float(data['Close'].values[-1])
+    ema_200 = float(data['Close'].ewm(span=200, adjust=False).mean().values[-1])
 
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / (loss + 0.00001)
-    rsi = float(rs.iloc[-1])
-
-    volume = float(data['Volume'].iloc[-1])
+    
+    # RSI calculation using .values[-1]
+    rsi = float(rs.values[-1])
+    
+    volume = float(data['Volume'].values[-1])
     avg_vol = float(data['Volume'].mean())
 
+    # Bias aur Score
     bias = "BULLISH" if current_price > ema_200 else "BEARISH"
     score = 50
     if (bias == "BULLISH" and rsi < 65) or (bias == "BEARISH" and rsi > 35): score += 20
