@@ -4,8 +4,8 @@ import pandas as pd
 import datetime
 import pytz
 
-st.set_page_config(page_title="Gold Institutional Terminal v5.1", layout="wide")
-st.title("🔴 XAUUSD Institutional Terminal v5.1")
+st.set_page_config(page_title="Gold Institutional Terminal v5.2", layout="wide")
+st.title("🔴 XAUUSD Institutional Terminal v5.2")
 
 ist = pytz.timezone('Asia/Kolkata')
 now = datetime.datetime.now(ist)
@@ -19,6 +19,7 @@ try:
 except Exception:
     st.stop()
 
+# Indicators
 price = float(data['Close'].values[-1])
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
@@ -29,6 +30,7 @@ vol_spike = data['Volume'].values[-1] > (data['Volume'].rolling(20).mean().value
 sentiment_bullish = (price > upper_band) and vol_spike
 sentiment_bearish = (price < lower_band) and vol_spike
 
+# Signal Logic
 if sentiment_bullish:
     signal, color, sl, tp = "INSTITUTIONAL BUY (Sentiment)", "#22c55e", price - 3.0, price + 9.0
     display_entry = f"<b>Confirmed Entry:</b> {price:.2f}"
@@ -39,13 +41,21 @@ else:
     signal, color, sl, tp = "WAITING FOR INSTITUTIONAL SENTIMENT", "#f59e0b", None, None
     display_entry = f"<i>Current Market Price: {price:.2f}</i>"
 
+# UI Display with forced Dark Theme CSS
 st.markdown(f"""
-<div style="background: #1e293b; padding: 20px; border-radius: 12px; border-left: 10px solid {color};">
-    <h1 style="margin:0; color:{color};">{signal}</h1>
-    <p><b>Time (IST):</b> {now.strftime('%H:%M:%S')}</p>
-    <hr>
-    <p style="font-size: 1.2rem;">{display_entry}</p>
-    {f'<p style="color:red; font-size:1.2rem;"><b>SL:</b> {sl:.2f}</p><p style="color:green; font-size:1.2rem;"><b>TP:</b> {tp:.2f}</p>' if sl else '<p><i>Waiting for volatility breakout...</i></p>'}
-    <p><small>Logic: Price Deviation (Bollinger) + 150% Volume Spike (Institutional Flow)</small></p>
+<div style="
+    background-color: #1e293b; 
+    padding: 25px; 
+    border-radius: 15px; 
+    border-left: 12px solid {color};
+    color: #f8fafc;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+">
+    <h1 style="margin:0; color:{color}; font-size: 2rem;">{signal}</h1>
+    <p style="color: #cbd5e1; margin-top: 10px;"><b>Time (IST):</b> {now.strftime('%H:%M:%S')}</p>
+    <hr style="border-color: #475569; margin: 20px 0;">
+    <p style="font-size: 1.3rem; color: #ffffff;">{display_entry}</p>
+    {f'<p style="color:#ff6b6b; font-size:1.2rem; margin: 5px 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem; margin: 5px 0;"><b>TP:</b> {tp:.2f}</p>' if sl else '<p style="color: #94a3b8; font-style: italic;">Waiting for volatility breakout...</p>'}
+    <p style="color: #64748b; font-size: 0.85rem; margin-top: 20px;">Logic: Price Deviation (Bollinger) + 150% Volume Spike (Institutional Flow)</p>
 </div>
 """, unsafe_allow_html=True)
