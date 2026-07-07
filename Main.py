@@ -4,26 +4,27 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.18", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.18 (Persistent Sync)")
+st.set_page_config(page_title="Institutional Pro v5.19", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.19 (Locked State)")
 
-# Initialize Session State for Offset persistence across refreshes
-if 'persisted_offset' not in st.session_state:
-    st.session_state.persisted_offset = 0.0
+# Initialize session state for persistent offset using number input
+if 'lock_offset' not in st.session_state:
+    st.session_state.lock_offset = 0.0
 
 # Sidebar Controls
 tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
 force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
-# Persistent Slider linked to Session State
-st.session_state.persisted_offset = st.sidebar.slider(
+# Replacing slider with a persistent number input to lock the offset value across refreshes
+st.session_state.lock_offset = st.sidebar.number_input(
     "🔧 Price Calibration Offset ($)", 
-    -30.0, 30.0, 
-    st.session_state.persisted_offset, 
-    0.25
+    min_value=-50.0, 
+    max_value=50.0, 
+    value=float(st.session_state.lock_offset), 
+    step=0.25
 )
 
-manual_offset = st.session_state.persisted_offset
+manual_offset = st.session_state.lock_offset
 
 ticker = "XAUUSD=X"
 
@@ -109,7 +110,7 @@ else:
         signal, color = "SCANNING MARKET STRUCTURE", "#64748b"
         display_entry = f"<i>Calibrated Mode Active | Price: {price:.2f}</i>"
 
-# UI
+# UI Match
 st.markdown(f"""
 <div style="background-color: #1e293b; padding: 25px; border-radius: 15px; border-left: 12px solid {color}; color: #f8fafc;">
     <h1 style="margin:0; color:{color}; font-size: 1.8rem;">{signal}</h1>
@@ -119,4 +120,3 @@ st.markdown(f"""
     {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring calibrated structure...</p>'}
 </div>
 """, unsafe_allow_html=True)
-        
