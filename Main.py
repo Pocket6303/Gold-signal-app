@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.24", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.24 (Direct Broker Sync)")
+st.set_page_config(page_title="Institutional Pro v5.25", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.25 (Hard-Locked Sync)")
 
 ticker = "XAUUSD=X"
 
@@ -30,26 +30,24 @@ data = data.dropna()
 
 raw_price = float(data['Close'].iloc[-1])
 
-# Direct Live Price Override Memory
-if 'broker_override' not in st.session_state:
-    st.session_state.broker_override = raw_price
+# Initialize session state strictly once, preserving through script reruns
+if 'locked_broker_price' not in st.session_state:
+    st.session_state.locked_broker_price = raw_price
 
-def sync_broker_price():
-    st.session_state.broker_override = st.session_state.broker_input
-
-st.sidebar.markdown("### 🎯 Direct Price Override")
-st.sidebar.number_input(
+st.sidebar.markdown("### 🎯 Permanent Price Lock")
+# Directly link number input value to session state without raw_price override reset
+user_broker_input = st.sidebar.number_input(
     "Enter Your Exact Broker Price ($)", 
     min_value=1000.0, 
     max_value=10000.0, 
-    value=float(st.session_state.broker_override), 
+    value=float(st.session_state.locked_broker_price), 
     step=0.25,
-    key='broker_input',
-    on_change=sync_broker_price
+    key='persistent_price_box'
 )
 
-# Calculate dynamic shifting based on user's exact broker price input
-price = st.session_state.broker_override
+# Update session state with whatever user has locked in the box
+st.session_state.locked_broker_price = user_broker_input
+price = st.session_state.locked_broker_price
 dynamic_offset = price - raw_price
 
 data['tr'] = data['High'] - data['Low']
@@ -73,7 +71,7 @@ if is_london_close: active_sessions.append("London Close")
 
 is_session = len(active_sessions) > 0 or force_signal
 
-# Indicators & Structure adjusted dynamically with real broker override
+# Indicators & Structure synced with locked override
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
 upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1])) + dynamic_offset
@@ -101,25 +99,25 @@ else:
         signal, color = "INSTITUTIONAL SELL (MSS + OB Confirmed)", "#ef4444"
         sl = price + (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Broker Synced Entry:</b> {price:.2f} | <b>Status:</b> Sell Executed"
+        display_entry = f"<b>Locked Broker Entry:</b> {price:.2f} | <b>Status:</b> Sell Executed"
     elif bullish_ob_valid and mss_bullish:
         signal, color = "INSTITUTIONAL BUY (MSS + OB Confirmed)", "#22c55e"
         sl = price - (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Broker Synced Entry:</b> {price:.2f} | <b>Status:</b> Buy Executed"
+        display_entry = f"<b>Locked Broker Entry:</b> {price:.2f} | <b>Status:</b> Buy Executed"
     elif approaching_bullish_ob or approaching_bearish_ob:
         signal, color = "PRE-ALERT: SETUP FORMING", "#f59e0b"
         display_entry = f"<i>Price approaching locked zone. Get ready in 5-10 mins! | Price: {price:.2f}</i>"
     else:
         signal, color = "SCANNING MARKET STRUCTURE", "#64748b"
-        display_entry = f"<i>Direct Feed Active | Price: {price:.2f}</i>"
+        display_entry = f"<i>Hard-Locked Feed Active | Price: {price:.2f}</i>"
 
 st.markdown(f"""
 <div style="background-color: #1e293b; padding: 25px; border-radius: 15px; border-left: 12px solid {color}; color: #f8fafc;">
     <h1 style="margin:0; color:{color}; font-size: 1.8rem;">{signal}</h1>
-    <p><b>IST Time:</b> {now_ist.strftime('%H:%M:%S')} | <b>TF:</b> {tf} | <b>Active Price:</b> {price:.2f} | <b>Auto-Shift:</b> {dynamic_offset:+.2f}$</p>
+    <p><b>IST Time:</b> {now_ist.strftime('%H:%M:%S')} | <b>TF:</b> {tf} | <b>Locked Price:</b> {price:.2f} | <b>Auto-Shift:</b> {dynamic_offset:+.2f}$</p>
     <hr style="border-color: #475569;">
     <p style="font-size: 1.3rem;">{display_entry}</p>
-    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring broker synced structured feed...</p>'}
+    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring locked structured feed...</p>'}
 </div>
 """, unsafe_allow_html=True)
