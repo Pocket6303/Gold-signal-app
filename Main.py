@@ -4,18 +4,18 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.9", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.9 (Balanced Mode)")
+st.set_page_config(page_title="Institutional Pro v5.12", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.12 (Pre-Alert System)")
 
 # Sidebar Controls
-tf = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "1h", "4h", "1d"], index=1)
-force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True) # Default True for more trades
+tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
+force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
 ticker = "GC=F"
 
 @st.cache_data(ttl=60)
 def get_data(tf):
-    data = yf.download(ticker, period="5d" if tf in ["5m", "15m"] else "1mo", interval=tf, progress=False)
+    data = yf.download(ticker, period="1mo", interval=tf, progress=False)
     return data
 
 data = get_data(tf)
@@ -37,31 +37,47 @@ now_ny = datetime.now(ny_tz)
 hour_ny = now_ny.hour
 is_session = (19 <= hour_ny) or (hour_ny < 17) or force_signal
 
-# Balanced Indicators (Less strict volume requirement)
+# Indicators & Structure
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
-upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1])) # Relaxed multiplier
+upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1]))
 lower_band = float(data['mid'].iloc[-1] - (1.5 * data['std'].iloc[-1]))
-vol_spike = data['Volume'].iloc[-1] > (data['Volume'].rolling(20).mean().iloc[-1] * 1.05) # Relaxed volume
+vol_spike = data['Volume'].iloc[-1] > (data['Volume'].rolling(20).mean().iloc[-1] * 1.05)
 
-# Logic
+# High-TF Order Block & MSS Proxy
+prev_high = data['High'].iloc[-10:-2].max()
+prev_low = data['Low'].iloc[-10:-2].min()
+mss_bullish = (price > prev_high) and vol_spike
+mss_bearish = (price < prev_low) and vol_spike
+
+# Exact Zone Taps & Pre-Alert Zones
+approaching_bullish_ob = price <= prev_low + (atr * 1.5) and price > prev_low + (atr * 0.8)
+approaching_bearish_ob = price >= prev_high - (atr * 1.5) and price < prev_high - (atr * 0.8)
+
+bullish_ob_valid = price <= prev_low + (atr * 0.8)
+bearish_ob_valid = price >= prev_high - (atr * 0.8)
+
+# Logic with Pre-Alert Status
 sl, tp = None, None
 if not is_session:
     signal, color = "MARKET OUT OF SESSION", "#64748b"
     display_entry = f"<i>NY Time: {now_ny.strftime('%H:%M')} - Waiting...</i>"
 else:
-    if (price >= upper_band) and vol_spike:
-        signal, color = "INSTITUTIONAL BUY (Pro)", "#22c55e"
-        sl = price - (atr*1.2)
+    if bearish_ob_valid and mss_bearish:
+        signal, color = "INSTITUTIONAL SELL (MSS + OB Confirmed)", "#ef4444"
+        sl = price + (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Entry:</b> {price:.2f} | <b>Momentum:</b> Bullish Break"
-    elif (price <= lower_band) and vol_spike:
-        signal, color = "INSTITUTIONAL SELL (Pro)", "#ef4444"
-        sl = price + (atr*1.2)
+        display_entry = f"<b>Entry:</b> {price:.2f} | <b>Status:</b> Sell Executed"
+    elif bullish_ob_valid and mss_bullish:
+        signal, color = "INSTITUTIONAL BUY (MSS + OB Confirmed)", "#22c55e"
+        sl = price - (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Entry:</b> {price:.2f} | <b>Momentum:</b> Bearish Break"
+        display_entry = f"<b>Entry:</b> {price:.2f} | <b>Status:</b> Buy Executed"
+    elif approaching_bullish_ob or approaching_bearish_ob:
+        signal, color = "PRE-ALERT: SETUP FORMING", "#f59e0b"
+        display_entry = f"<i>Price approaching institutional zone. Get ready in 5-10 mins! | Price: {price:.2f}</i>"
     else:
-        signal, color = "SCANNING FOR OPPORTUNITY", "#f59e0b"
+        signal, color = "SCANNING MARKET STRUCTURE", "#64748b"
         display_entry = f"<i>Balanced Mode Active | Price: {price:.2f}</i>"
 
 # UI
@@ -71,6 +87,6 @@ st.markdown(f"""
     <p><b>NY Time:</b> {now_ny.strftime('%H:%M:%S')} | <b>TF:</b> {tf}</p>
     <hr style="border-color: #475569;">
     <p style="font-size: 1.3rem;">{display_entry}</p>
-    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Looking for price action triggers...</p>'}
+    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring price action & zones...</p>'}
 </div>
 """, unsafe_allow_html=True)
