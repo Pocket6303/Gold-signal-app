@@ -5,8 +5,8 @@ import numpy as np
 from datetime import datetime
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Cumulative v5.39", layout="wide")
-st.title("🏛️ XAUUSD Master Cumulative Engine v5.39")
+st.set_page_config(page_title="XAUUSD Master Cumulative v5.40", layout="wide")
+st.title("🏛️ XAUUSD Master Cumulative Engine v5.40")
 
 # --- DATA & OFFSET ---
 ticker = "XAUUSD=X"
@@ -17,20 +17,38 @@ manual_offset = st.sidebar.slider("Fixed Offset ($)", -50.0, 50.0, -14.0, 0.25)
 def get_data(tf):
     data = yf.download(ticker, period="5d", interval=tf, progress=False)
     daily = yf.download(ticker, period="5d", interval="1d", progress=False)
+    if data.empty:
+        data = yf.download("GC=F", period="5d", interval=tf, progress=False)
     return data, daily
 
 data, daily = get_data(tf)
+
+# --- BULLETPROOF SAFETY CHECK ---
+if data.empty or len(data) < 20 or daily.empty or len(daily) < 2:
+    st.warning("⚠️ Market data syncing or currently unavailable for this timeframe. Please wait a moment...")
+    st.stop()
+
+# Flatten columns if multi-index
+if isinstance(data.columns, pd.MultiIndex):
+    data.columns = data.columns.get_level_values(0)
+if isinstance(daily.columns, pd.MultiIndex):
+    daily.columns = daily.columns.get_level_values(0)
+
+data = data.dropna()
 price = float(data['Close'].iloc[-1]) + manual_offset
 
-# --- CUMULATIVE INDICATOR STACK (No deletion, only addition) ---
-# 1. Base Indicators
+# --- CUMULATIVE INDICATOR STACK ---
 data['mid'] = data['Close'].rolling(20).mean() + manual_offset
 data['std'] = data['Close'].rolling(20).std()
 data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
 data['atr'] = (data['High'] - data['Low']).rolling(14).mean()
-data['rsi'] = 100 - (100 / (1 + (data['Close'].diff().clip(lower=0).rolling(14).mean() / -data['Close'].diff().clip(upper=0).rolling(14).mean())))
 
-# 2. Institutional Layers
+delta = data['Close'].diff()
+gain = delta.clip(lower=0).rolling(14).mean()
+loss = -delta.clip(upper=0).rolling(14).mean()
+data['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
+
+# Institutional Layers
 pdh = float(daily['High'].iloc[-2]) + manual_offset
 pdl = float(daily['Low'].iloc[-2]) + manual_offset
 is_pdh_sweep = price > pdh and price < (pdh + 2)
@@ -42,7 +60,6 @@ mss_bear = price < data['Low'].rolling(10).min().iloc[-2] + manual_offset
 signal = "MONITORING: All Indicators Scanning..."
 color = "#64748b"
 
-# Verification (Layered)
 if is_pdh_sweep and mss_bear and price < data['ema_50'].iloc[-1]:
     signal, color = "SELL: Institutional PDH Sweep + MSS + Trend Alignment", "#ef4444"
 elif is_pdl_sweep and mss_bull and price > data['ema_50'].iloc[-1]:
