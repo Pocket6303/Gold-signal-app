@@ -8,7 +8,7 @@ import os
 import json
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Complete v5.44.1", layout="wide")
+st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.1", layout="wide")
 st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
 
 ticker = "XAUUSD=X"
@@ -38,9 +38,9 @@ def log_trade(signal_type, entry_p, sl_p):
     except:
         pass
 
-# Sidebar
+# Sidebar with Fixed Offset & Filters
 tf = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h"], index=1)
-manual_offset = st.sidebar.slider("Fixed Offset ($)", -50.0, 50.0, -14.0, 0.25)
+manual_offset = st.sidebar.slider("Fixed Offset ($)", -100.0, 100.0, -14.0, 0.25)
 force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
 @st.cache_data(ttl=10)
@@ -61,11 +61,12 @@ if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_leve
 if isinstance(daily.columns, pd.MultiIndex): daily.columns = daily.columns.get_level_values(0)
 
 data = data.dropna()
-price = float(data['Close'].iloc[-1]) + manual_offset
+raw_price = float(data['Close'].iloc[-1])
+price = raw_price + manual_offset
 pdh = float(daily['High'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price + 10
 pdl = float(daily['Low'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price - 10
 
-# Cumulative Layers Stack (EMA50, ATR, RSI, Session Bounds)
+# Cumulative Layers Stack
 data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
 data['atr'] = (data['High'] - data['Low']).rolling(14).mean()
 lookback_asian = min(24, len(data))
@@ -80,7 +81,7 @@ mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + manual_offset 
 
 now_ist = datetime.now(IST_TZ)
 
-# Engine with Early Clock Alert & Layered Confluence Verification
+# Engine with Early Clock Alert
 signal, color, details, sl, tp = "SCANNING MARKET STRUCTURE", "#64748b", "Monitoring indicator layers & institutional liquidity...", None, None
 
 if abs(price - pdh) <= (data['atr'].iloc[-1] * 0.5) or abs(price - asian_high) <= (data['atr'].iloc[-1] * 0.5):
@@ -101,11 +102,12 @@ elif is_pdl_sweep and mss_bull and (price > data['ema_50'].iloc[-1]):
     details = f"<b>Execution Reason:</b> Low-side liquidity grab at PDL combined with a bullish Market Structure Shift (MSS) above the 50-EMA trend line."
     log_trade("BUY", price, sl)
 
-# Display Dashboard Card
+# Display Dashboard with IST Timestamp
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 30px; border-radius: 16px; border-left: 14px solid {color}; color: #f8fafc;">
     <h1 style="margin:0 0 10px 0; color:{color}; font-size: 1.8rem;">{signal}</h1>
     <p style="margin:4px 0; color:#94a3b8;"><b>Price:</b> {price:.2f} | <b>ATR:</b> {data['atr'].iloc[-1]:.2f} | <b>Offset:</b> {manual_offset:+.2f}$</p>
+    <p style="margin:0 0 15px 0; color:#cbd5e1; font-size: 0.9rem;">🕒 IST Time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}</p>
     <p style="margin:12px 0 0 0; font-size: 1.1rem; color:#e2e8f0;">{details}</p>
     {f'<p style="color:#ff6b6b; margin:10px 0 0 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; margin:4px 0 0 0;"><b>TP:</b> {tp}</p>' if sl else ''}
 </div>
@@ -116,3 +118,4 @@ st.subheader("📅 30-Day Automated Performance Journal")
 j_data = load_journal()
 if j_data: st.dataframe(pd.DataFrame(j_data), use_container_width=True)
 else: st.info("No trades logged in the 30-day window yet.")
+    
