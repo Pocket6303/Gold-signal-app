@@ -8,8 +8,8 @@ import os
 import json
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Complete v5.44", layout="wide")
-st.title("🏛️ XAUUSD Master Institutional Engine v5.44")
+st.set_page_config(page_title="XAUUSD Master Complete v5.44.1", layout="wide")
+st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
 
 ticker = "XAUUSD=X"
 JOURNAL_FILE = "trade_journal.json"
@@ -65,7 +65,7 @@ price = float(data['Close'].iloc[-1]) + manual_offset
 pdh = float(daily['High'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price + 10
 pdl = float(daily['Low'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price - 10
 
-# Indicators & Cumulative Stack
+# Cumulative Layers Stack (EMA50, ATR, RSI, Session Bounds)
 data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
 data['atr'] = (data['High'] - data['Low']).rolling(14).mean()
 lookback_asian = min(24, len(data))
@@ -80,15 +80,15 @@ mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + manual_offset 
 
 now_ist = datetime.now(IST_TZ)
 
-# Decision Engine with Early Clock Alert & Detailed Strategy Reason
-signal, color, details, sl, tp = "SCANNING MARKET STRUCTURE", "#64748b", "Monitoring all indicator layers for institutional setup...", None, None
+# Engine with Early Clock Alert & Layered Confluence Verification
+signal, color, details, sl, tp = "SCANNING MARKET STRUCTURE", "#64748b", "Monitoring indicator layers & institutional liquidity...", None, None
 
 if abs(price - pdh) <= (data['atr'].iloc[-1] * 0.5) or abs(price - asian_high) <= (data['atr'].iloc[-1] * 0.5):
     signal, color = "⏱️ BE READY: Price Approaching High Liquidity Zone", "#f59e0b"
-    details = f"<b>Strategy Warning:</b> Price is testing upper boundaries (PDH / Asian High). Prepare for potential sweep reaction in 5-10 mins."
+    details = "<b>Strategy Warning:</b> Price is testing upper boundaries (PDH / Asian High). Prepare for potential sweep reaction."
 elif abs(price - pdl) <= (data['atr'].iloc[-1] * 0.5) or abs(price - asian_low) <= (data['atr'].iloc[-1] * 0.5):
     signal, color = "⏱️ BE READY: Price Approaching Low Liquidity Zone", "#f59e0b"
-    details = f"<b>Strategy Warning:</b> Price is testing lower boundaries (PDL / Asian Low). Prepare for potential sweep reaction in 5-10 mins."
+    details = "<b>Strategy Warning:</b> Price is testing lower boundaries (PDL / Asian Low). Prepare for potential sweep reaction."
 
 if is_pdh_sweep and mss_bear and (price < data['ema_50'].iloc[-1]):
     signal, color = "SELL: Institutional PDH Liquidity Sweep + LTF MSS", "#ef4444"
@@ -101,7 +101,7 @@ elif is_pdl_sweep and mss_bull and (price > data['ema_50'].iloc[-1]):
     details = f"<b>Execution Reason:</b> Low-side liquidity grab at PDL combined with a bullish Market Structure Shift (MSS) above the 50-EMA trend line."
     log_trade("BUY", price, sl)
 
-# Display Dashboard
+# Display Dashboard Card
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 30px; border-radius: 16px; border-left: 14px solid {color}; color: #f8fafc;">
     <h1 style="margin:0 0 10px 0; color:{color}; font-size: 1.8rem;">{signal}</h1>
