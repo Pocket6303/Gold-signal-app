@@ -8,8 +8,8 @@ import os
 import json
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Complete v5.44.1", layout="wide")
-st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
+st.set_page_config(page_title="XAUUSD Dynamic Gap v5.49", layout="wide")
+st.title("🏛️ XAUUSD Master Institutional Engine v5.49")
 
 ticker = "XAUUSD=X"
 JOURNAL_FILE = "trade_journal.json"
@@ -38,9 +38,8 @@ def log_trade(signal_type, entry_p, sl_p):
     except:
         pass
 
-# Sidebar
+# Sidebar controls
 tf = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h"], index=1)
-manual_offset = st.sidebar.slider("Fixed Offset ($)", -50.0, 50.0, -14.0, 0.25)
 force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
 @st.cache_data(ttl=10)
@@ -61,22 +60,41 @@ if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_leve
 if isinstance(daily.columns, pd.MultiIndex): daily.columns = daily.columns.get_level_values(0)
 
 data = data.dropna()
-price = float(data['Close'].iloc[-1]) + manual_offset
-pdh = float(daily['High'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price + 10
-pdl = float(daily['Low'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price - 10
+raw_api_price = float(data['Close'].iloc[-1])
 
-# Cumulative Layers Stack (EMA50, ATR, RSI, Session Bounds)
-data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
+# --- DYNAMIC GAP-TRACKING SYNC SYSTEM ---
+# Yeh user ko reference ke liye live broker vs API difference set karne deta hai, 
+# lekin price ko freeze nahi karta—jaise hi API move hogi, price bhi sath move karega.
+if 'broker_reference_price' not in st.session_state:
+    st.session_state.broker_reference_price = float(round(raw_api_price + 10.0, 2))
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚡ Dynamic Gap Sync")
+ref_input = st.sidebar.number_input("Broker Reference Price ($)", value=st.session_state.broker_reference_price, step=0.1)
+
+if st.sidebar.button("Recalculate Dynamic Gap"):
+    st.session_state.broker_reference_price = ref_input
+    st.rerun()
+
+# Dynamic Offset calculation: Har bar API price update hone par gap utna hi rehta hai, price freeze nahi hota
+dynamic_gap = st.session_state.broker_reference_price - raw_api_price
+price = raw_api_price + dynamic_gap
+
+pdh = float(daily['High'].iloc[-2]) + dynamic_gap if not daily.empty and len(daily) >= 2 else price + 10
+pdl = float(daily['Low'].iloc[-2]) + dynamic_gap if not daily.empty and len(daily) >= 2 else price - 10
+
+# Cumulative Layers Stack (EMA50, ATR, RSI, Session Bounds with Real-Time Tracking)
+data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + dynamic_gap
 data['atr'] = (data['High'] - data['Low']).rolling(14).mean()
 lookback_asian = min(24, len(data))
-asian_high = data['High'].iloc[-lookback_asian:].max() + manual_offset
-asian_low = data['Low'].iloc[-lookback_asian:].min() + manual_offset
+asian_high = data['High'].iloc[-lookback_asian:].max() + dynamic_gap
+asian_low = data['Low'].iloc[-lookback_asian:].min() + dynamic_gap
 
 is_pdh_sweep = price > pdh and price < (pdh + 3)
 is_pdl_sweep = price < pdl and price > (pdl - 3)
 roll_len = min(10, len(data) - 1)
-mss_bull = price > data['High'].rolling(roll_len).max().iloc[-2] + manual_offset if roll_len > 1 else False
-mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + manual_offset if roll_len > 1 else False
+mss_bull = price > data['High'].rolling(roll_len).max().iloc[-2] + dynamic_gap if roll_len > 1 else False
+mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + dynamic_gap if roll_len > 1 else False
 
 now_ist = datetime.now(IST_TZ)
 
@@ -105,7 +123,7 @@ elif is_pdl_sweep and mss_bull and (price > data['ema_50'].iloc[-1]):
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 30px; border-radius: 16px; border-left: 14px solid {color}; color: #f8fafc;">
     <h1 style="margin:0 0 10px 0; color:{color}; font-size: 1.8rem;">{signal}</h1>
-    <p style="margin:4px 0; color:#94a3b8;"><b>Price:</b> {price:.2f} | <b>ATR:</b> {data['atr'].iloc[-1]:.2f} | <b>Offset:</b> {manual_offset:+.2f}$</p>
+    <p style="margin:4px 0; color:#94a3b8;"><b>Live Tracked Price:</b> {price:.2f} | <b>ATR:</b> {data['atr'].iloc[-1]:.2f} | <b>Dynamic Gap:</b> {dynamic_gap:+.2f}$</p>
     <p style="margin:12px 0 0 0; font-size: 1.1rem; color:#e2e8f0;">{details}</p>
     {f'<p style="color:#ff6b6b; margin:10px 0 0 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; margin:4px 0 0 0;"><b>TP:</b> {tp}</p>' if sl else ''}
 </div>
