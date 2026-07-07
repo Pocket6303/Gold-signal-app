@@ -4,28 +4,20 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.21", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.21 (Auto-Corrected Feed)")
-
-# ==========================================
-# 🔧 PERMANENT FIXED OFFSET (Change here once)
-# If Yahoo is ahead by $14, put -14.0 here.
-# If Yahoo is behind by $14, put +14.0 here.
-FIXED_PRICE_OFFSET = -14.0 
-# ==========================================
-
-# Sidebar Controls
-tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
-force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
+st.set_page_config(page_title="Institutional Pro v5.24", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.24 (Direct Broker Sync)")
 
 ticker = "XAUUSD=X"
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=10)
 def get_data(tf):
     data = yf.download(ticker, period="5d", interval=tf, progress=False)
     if data.empty:
         data = yf.download("GC=F", period="5d", interval=tf, progress=False)
     return data
+
+tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
+force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
 data = get_data(tf)
 if data.empty:
@@ -36,9 +28,29 @@ if isinstance(data.columns, pd.MultiIndex):
     data.columns = data.columns.get_level_values(0)
 data = data.dropna()
 
-# Apply Permanent Hardcoded Calibration Offset directly to all values
 raw_price = float(data['Close'].iloc[-1])
-price = raw_price + FIXED_PRICE_OFFSET
+
+# Direct Live Price Override Memory
+if 'broker_override' not in st.session_state:
+    st.session_state.broker_override = raw_price
+
+def sync_broker_price():
+    st.session_state.broker_override = st.session_state.broker_input
+
+st.sidebar.markdown("### 🎯 Direct Price Override")
+st.sidebar.number_input(
+    "Enter Your Exact Broker Price ($)", 
+    min_value=1000.0, 
+    max_value=10000.0, 
+    value=float(st.session_state.broker_override), 
+    step=0.25,
+    key='broker_input',
+    on_change=sync_broker_price
+)
+
+# Calculate dynamic shifting based on user's exact broker price input
+price = st.session_state.broker_override
+dynamic_offset = price - raw_price
 
 data['tr'] = data['High'] - data['Low']
 atr = data['tr'].rolling(14).mean().iloc[-1]
@@ -61,16 +73,16 @@ if is_london_close: active_sessions.append("London Close")
 
 is_session = len(active_sessions) > 0 or force_signal
 
-# Indicators & Structure (Synced with offset)
+# Indicators & Structure adjusted dynamically with real broker override
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
-upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1])) + FIXED_PRICE_OFFSET
-lower_band = float(data['mid'].iloc[-1] - (1.5 * data['std'].iloc[-1])) + FIXED_PRICE_OFFSET
+upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1])) + dynamic_offset
+lower_band = float(data['mid'].iloc[-1] - (1.5 * data['std'].iloc[-1])) + dynamic_offset
 
 vol_spike = data['Volume'].iloc[-1] > (data['Volume'].rolling(20).mean().iloc[-1] * 1.05)
 
-prev_high = data['High'].iloc[-10:-2].max() + FIXED_PRICE_OFFSET
-prev_low = data['Low'].iloc[-10:-2].min() + FIXED_PRICE_OFFSET
+prev_high = data['High'].iloc[-10:-2].max() + dynamic_offset
+prev_low = data['Low'].iloc[-10:-2].min() + dynamic_offset
 mss_bullish = (price > prev_high) and vol_spike
 mss_bearish = (price < prev_low) and vol_spike
 
@@ -89,26 +101,25 @@ else:
         signal, color = "INSTITUTIONAL SELL (MSS + OB Confirmed)", "#ef4444"
         sl = price + (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Calibrated Spot Entry:</b> {price:.2f} | <b>Status:</b> Sell Executed"
+        display_entry = f"<b>Broker Synced Entry:</b> {price:.2f} | <b>Status:</b> Sell Executed"
     elif bullish_ob_valid and mss_bullish:
         signal, color = "INSTITUTIONAL BUY (MSS + OB Confirmed)", "#22c55e"
         sl = price - (atr*1.5)
         tp = "HOLD (Trailing SL)"
-        display_entry = f"<b>Calibrated Spot Entry:</b> {price:.2f} | <b>Status:</b> Buy Executed"
+        display_entry = f"<b>Broker Synced Entry:</b> {price:.2f} | <b>Status:</b> Buy Executed"
     elif approaching_bullish_ob or approaching_bearish_ob:
         signal, color = "PRE-ALERT: SETUP FORMING", "#f59e0b"
         display_entry = f"<i>Price approaching locked zone. Get ready in 5-10 mins! | Price: {price:.2f}</i>"
     else:
         signal, color = "SCANNING MARKET STRUCTURE", "#64748b"
-        display_entry = f"<i>Auto-Corrected Mode Active | Price: {price:.2f}</i>"
+        display_entry = f"<i>Direct Feed Active | Price: {price:.2f}</i>"
 
-# UI Match (Exact same interface, IST time, fixed offset display)
 st.markdown(f"""
 <div style="background-color: #1e293b; padding: 25px; border-radius: 15px; border-left: 12px solid {color}; color: #f8fafc;">
     <h1 style="margin:0; color:{color}; font-size: 1.8rem;">{signal}</h1>
-    <p><b>IST Time:</b> {now_ist.strftime('%H:%M:%S')} | <b>TF:</b> {tf} | <b>Fixed Offset:</b> {FIXED_PRICE_OFFSET:+.2f}$</p>
+    <p><b>IST Time:</b> {now_ist.strftime('%H:%M:%S')} | <b>TF:</b> {tf} | <b>Active Price:</b> {price:.2f} | <b>Auto-Shift:</b> {dynamic_offset:+.2f}$</p>
     <hr style="border-color: #475569;">
     <p style="font-size: 1.3rem;">{display_entry}</p>
-    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring synchronized structure...</p>'}
+    {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring broker synced structured feed...</p>'}
 </div>
 """, unsafe_allow_html=True)
