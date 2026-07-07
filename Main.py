@@ -4,13 +4,26 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.17", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.17 (Calibrated Feed)")
+st.set_page_config(page_title="Institutional Pro v5.18", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.18 (Persistent Sync)")
+
+# Initialize Session State for Offset persistence across refreshes
+if 'persisted_offset' not in st.session_state:
+    st.session_state.persisted_offset = 0.0
 
 # Sidebar Controls
 tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
 force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
-manual_offset = st.sidebar.slider("🔧 Price Calibration Offset ($)", -30.0, 30.0, 0.0, 0.25)
+
+# Persistent Slider linked to Session State
+st.session_state.persisted_offset = st.sidebar.slider(
+    "🔧 Price Calibration Offset ($)", 
+    -30.0, 30.0, 
+    st.session_state.persisted_offset, 
+    0.25
+)
+
+manual_offset = st.session_state.persisted_offset
 
 ticker = "XAUUSD=X"
 
@@ -30,7 +43,7 @@ if isinstance(data.columns, pd.MultiIndex):
     data.columns = data.columns.get_level_values(0)
 data = data.dropna()
 
-# Apply Calibration Offset to eliminate discrepancy and protect indicators
+# Apply Calibration Offset
 raw_price = float(data['Close'].iloc[-1])
 price = raw_price + manual_offset
 
@@ -55,7 +68,7 @@ if is_london_close: active_sessions.append("London Close")
 
 is_session = len(active_sessions) > 0 or force_signal
 
-# Indicators & Structure (Using calibrated price series)
+# Indicators & Structure
 data['std'] = data['Close'].rolling(20).std()
 data['mid'] = data['Close'].rolling(20).mean()
 upper_band = float(data['mid'].iloc[-1] + (1.5 * data['std'].iloc[-1])) + manual_offset
@@ -106,3 +119,4 @@ st.markdown(f"""
     {f'<p style="color:#ff6b6b; font-size:1.2rem;"><b>Initial SL:</b> {sl:.2f}</p><p style="color:#51cf66; font-size:1.2rem;"><b>TP:</b> {tp}</p>' if sl is not None else '<p style="color:#94a3b8;">Monitoring calibrated structure...</p>'}
 </div>
 """, unsafe_allow_html=True)
+        
