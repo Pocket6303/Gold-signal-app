@@ -8,8 +8,8 @@ import os
 import json
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Ultimate v5.41", layout="wide")
-st.title("🏛️ XAUUSD Master Cumulative Institutional Engine v5.41")
+st.set_page_config(page_title="XAUUSD Master Ultimate v5.42", layout="wide")
+st.title("🏛️ XAUUSD Master Cumulative Institutional Engine v5.42")
 
 ticker = "XAUUSD=X"
 JOURNAL_FILE = "trade_journal.json"
@@ -61,15 +61,18 @@ force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 @st.cache_data(ttl=10)
 def get_data(tf):
     data = yf.download(ticker, period="5d", interval=tf, progress=False)
-    daily = yf.download(ticker, period="5d", interval="1d", progress=False)
+    daily = yf.download(ticker, period="10d", interval="1d", progress=False)
     if data.empty:
         data = yf.download("GC=F", period="5d", interval=tf, progress=False)
+    if daily.empty:
+        daily = yf.download("GC=F", period="10d", interval="1d", progress=False)
     return data, daily
 
 data, daily = get_data(tf)
 
-if data.empty or len(data) < 20:
-    st.warning("⚠️ Market data loading or syncing. Please hold on...")
+# --- BULLETPROOF SAFETY FALLBACKS ---
+if data.empty or len(data) < 10:
+    st.warning("⚠️ Market intraday data syncing or unavailable. Please wait a moment...")
     st.stop()
 
 if isinstance(data.columns, pd.MultiIndex):
@@ -81,7 +84,15 @@ data = data.dropna()
 raw_price = float(data['Close'].iloc[-1])
 price = raw_price + manual_offset
 
-# --- C CUMULATIVE INDICATOR STACK (All past tools intact) ---
+# Safe Daily High/Low extraction with fallback
+if not daily.empty and len(daily) >= 2:
+    pdh = float(daily['High'].iloc[-2]) + manual_offset
+    pdl = float(daily['Low'].iloc[-2]) + manual_offset
+else:
+    pdh = float(data['High'].max()) + manual_offset
+    pdl = float(data['Low'].min()) + manual_offset
+
+# --- CUMULATIVE INDICATOR STACK (All features intact) ---
 data['mid'] = data['Close'].rolling(20).mean() + manual_offset
 data['std'] = data['Close'].rolling(20).std()
 data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
@@ -92,23 +103,22 @@ gain = delta.clip(lower=0).rolling(14).mean()
 loss = -delta.clip(upper=0).rolling(14).mean()
 data['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
 
-# Session & Daily Liquidity Bounds (Cumulative)
-asian_high = data['High'].iloc[-24:].max() + manual_offset
-asian_low = data['Low'].iloc[-24:].min() + manual_offset
-pdh = float(daily['High'].iloc[-2]) + manual_offset
-pdl = float(daily['Low'].iloc[-2]) + manual_offset
+# Session Bounds
+lookback_asian = min(24, len(data))
+asian_high = data['High'].iloc[-lookback_asian:].max() + manual_offset
+asian_low = data['Low'].iloc[-lookback_asian:].min() + manual_offset
 
 # Structure & Sweep Detections
-vol_spike = data['Volume'].iloc[-1] > (data['Volume'].rolling(20).mean().iloc[-1] * 1.01)
 is_pdh_sweep = price > pdh and price < (pdh + 3)
 is_pdl_sweep = price < pdl and price > (pdl - 3)
 is_asian_high_sweep = price > asian_high and price < (asian_high + 2.5)
 is_asian_low_sweep = price < asian_low and price > (asian_low - 2.5)
 
-mss_bull = price > data['High'].rolling(10).max().iloc[-2] + manual_offset
-mss_bear = price < data['Low'].rolling(10).min().iloc[-2] + manual_offset
+roll_len = min(10, len(data) - 1)
+mss_bull = price > data['High'].rolling(roll_len).max().iloc[-2] + manual_offset if roll_len > 1 else False
+mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + manual_offset if roll_len > 1 else False
 
-# --- ADVANCED CONFLUENCE & MULTI-STRATEGY DECISION ENGINE ---
+# --- DECISION ENGINE ---
 now_ist = datetime.now(IST_TZ)
 hour_ist = now_ist.hour
 is_active_session = (22 <= hour_ist) or (hour_ist < 7) or (12 <= hour_ist < 22) or force_signal
@@ -151,4 +161,3 @@ if journal_data:
     st.dataframe(pd.DataFrame(journal_data), use_container_width=True)
 else:
     st.info("No trades logged in the current 30-day window yet.")
-    
