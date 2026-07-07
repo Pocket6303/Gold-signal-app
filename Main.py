@@ -4,27 +4,34 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-st.set_page_config(page_title="Institutional Pro v5.19", layout="wide")
-st.title("🔴 XAUUSD Institutional Pro v5.19 (Locked State)")
+st.set_page_config(page_title="Institutional Pro v5.20", layout="wide")
+st.title("🔴 XAUUSD Institutional Pro v5.20 (URL Locked)")
 
-# Initialize session state for persistent offset using number input
-if 'lock_offset' not in st.session_state:
-    st.session_state.lock_offset = 0.0
+# Load/Save offset permanently to URL query params so refresh cannot wipe it
+query_params = st.query_params
+if "offset" in query_params:
+    try:
+        saved_offset = float(query_params["offset"])
+    except ValueError:
+        saved_offset = 0.0
+else:
+    saved_offset = 0.0
 
 # Sidebar Controls
 tf = st.sidebar.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=0)
 force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
 
-# Replacing slider with a persistent number input to lock the offset value across refreshes
-st.session_state.lock_offset = st.sidebar.number_input(
+# Number input for precise adjustment
+manual_offset = st.sidebar.number_input(
     "🔧 Price Calibration Offset ($)", 
-    min_value=-50.0, 
-    max_value=50.0, 
-    value=float(st.session_state.lock_offset), 
+    min_value=-100.0, 
+    max_value=100.0, 
+    value=saved_offset, 
     step=0.25
 )
 
-manual_offset = st.session_state.lock_offset
+# Permanently update URL query params immediately upon change
+st.query_params["offset"] = manual_offset
 
 ticker = "XAUUSD=X"
 
