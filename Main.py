@@ -1,18 +1,16 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
 from datetime import datetime
 import pytz
 import os
 import json
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.1", layout="wide")
+# --- APP CONFIG ---
+st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.1", layout="centered")
 st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
 
-ticker = "XAUUSD=X"
-JOURNAL_FILE = "trade_journal.json"
+JOURNAL_FILE = "smc_gmt4_journey_journal.json"
 IST_TZ = pytz.timezone('Asia/Kolkata')
 
 def load_journal():
@@ -26,96 +24,93 @@ def load_journal():
             return []
     return []
 
-def log_trade(signal_type, entry_p, sl_p):
+def log_trade(signal_type, entry_p, sl_p, tp_p, risk_pts):
     journal = load_journal()
     now_str = datetime.now(IST_TZ).isoformat()
-    if journal and (datetime.now(IST_TZ) - datetime.fromisoformat(journal[-1]['timestamp'])).seconds < 900:
+    # Log throttle 3 minutes to prevent duplicate logs
+    if journal and (datetime.now(IST_TZ) - datetime.fromisoformat(journal[-1]['timestamp'])).seconds < 180:
         return
-    journal.append({"timestamp": now_str, "type": signal_type, "entry": entry_p, "sl": sl_p, "risk_points": abs(entry_p - sl_p)})
+    
+    journal.append({
+        "timestamp": now_str, 
+        "type": signal_type, 
+        "entry": round(entry_p, 2), 
+        "sl": round(sl_p, 2),
+        "tp": round(tp_p, 2),
+        "risk_pts": round(risk_pts, 2)
+    })
     try:
         with open(JOURNAL_FILE, "w") as f:
             json.dump(journal, f, indent=4)
     except:
         pass
 
-# Sidebar with Fixed Offset & Filters
-tf = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h"], index=1)
-manual_offset = st.sidebar.slider("Fixed Offset ($)", -100.0, 100.0, -14.0, 0.25)
-force_signal = st.sidebar.checkbox("🚀 Force Active Session", value=True)
+# --- SIDEBAR & OFFSET ---
+tf = st.sidebar.selectbox("Select Timeframe", ["1m", "5m", "15m"], index=1)
+# DEFAULT OFFSET SET TO -14.0 AS REQUESTED
+manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -100.0, 100.0, -14.0, 0.25)
+force_active = st.sidebar.checkbox("🚀 Force Active Scalp Trigger", value=False)
 
-@st.cache_data(ttl=10)
-def get_data(tf):
-    data = yf.download(ticker, period="5d", interval=tf, progress=False)
-    daily = yf.download(ticker, period="10d", interval="1d", progress=False)
-    if data.empty: data = yf.download("GC=F", period="5d", interval=tf, progress=False)
-    if daily.empty: daily = yf.download("GC=F", period="10d", interval="1d", progress=False)
-    return data, daily
+# Data Fetching
+@st.cache_data(ttl=5)
+def get_data(ticker, interval):
+    df = yf.download(ticker, period="1d", interval=interval, progress=False)
+    if df.empty: df = yf.download("GC=F", period="1d", interval=interval, progress=False)
+    return df
 
-data, daily = get_data(tf)
-
-if data.empty or len(data) < 10:
-    st.warning("⚠️ Market data syncing or unavailable. Please wait...")
+raw_df = get_data("XAUUSD=X", tf)
+if raw_df.empty or len(raw_df) < 15:
+    st.warning("⚠️ Syncing live price action...")
     st.stop()
 
-if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
-if isinstance(daily.columns, pd.MultiIndex): daily.columns = daily.columns.get_level_values(0)
+if isinstance(raw_df.columns, pd.MultiIndex): 
+    raw_df.columns = raw_df.columns.get_level_values(0)
 
-data = data.dropna()
-raw_price = float(data['Close'].iloc[-1])
-price = raw_price + manual_offset
-pdh = float(daily['High'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price + 10
-pdl = float(daily['Low'].iloc[-2]) + manual_offset if not daily.empty and len(daily) >= 2 else price - 10
+data = raw_df.dropna()
+# Applying the -14.0 offset logic consistently
+price = float(data['Close'].iloc[-1]) + manual_offset
+atr_val = float((data['High'] - data['Low']).iloc[-10:].mean())
 
-# Cumulative Layers Stack
-data['ema_50'] = data['Close'].ewm(span=50, adjust=False).mean() + manual_offset
-data['atr'] = (data['High'] - data['Low']).rolling(14).mean()
-lookback_asian = min(24, len(data))
-asian_high = data['High'].iloc[-lookback_asian:].max() + manual_offset
-asian_low = data['Low'].iloc[-lookback_asian:].min() + manual_offset
+# --- SCALP ENGINE (Pure Price Action) ---
+recent_max = float(data['High'].iloc[-5:-1].max()) + manual_offset
+recent_min = float(data['Low'].iloc[-5:-1].min()) + manual_offset
 
-is_pdh_sweep = price > pdh and price < (pdh + 3)
-is_pdl_sweep = price < pdl and price > (pdl - 3)
-roll_len = min(10, len(data) - 1)
-mss_bull = price > data['High'].rolling(roll_len).max().iloc[-2] + manual_offset if roll_len > 1 else False
-mss_bear = price < data['Low'].rolling(roll_len).min().iloc[-2] + manual_offset if roll_len > 1 else False
+signal_box = "⏳ MONITORING MARKET BOUNDARIES"
+color = "#f59e0b"
+sl_val, tp_val = 0.0, 0.0
+trade_type = "NONE"
 
-now_ist = datetime.now(IST_TZ)
+if force_active or price > recent_max:
+    signal_box = "⚡ SCALP BUY SETUP (1:2 RR)"
+    color = "#22c55e"
+    trade_type = "BUY"
+    sl_val = price - (atr_val * 0.8)
+    tp_val = price + (atr_val * 1.6)
+    log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val))
+elif price < recent_min:
+    signal_box = "⚡ SCALP SELL SETUP (1:2 RR)"
+    color = "#ef4444"
+    trade_type = "SELL"
+    sl_val = price + (atr_val * 0.8)
+    tp_val = price - (atr_val * 1.6)
+    log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val))
 
-# Engine with Early Clock Alert
-signal, color, details, sl, tp = "SCANNING MARKET STRUCTURE", "#64748b", "Monitoring indicator layers & institutional liquidity...", None, None
-
-if abs(price - pdh) <= (data['atr'].iloc[-1] * 0.5) or abs(price - asian_high) <= (data['atr'].iloc[-1] * 0.5):
-    signal, color = "⏱️ BE READY: Price Approaching High Liquidity Zone", "#f59e0b"
-    details = "<b>Strategy Warning:</b> Price is testing upper boundaries (PDH / Asian High). Prepare for potential sweep reaction."
-elif abs(price - pdl) <= (data['atr'].iloc[-1] * 0.5) or abs(price - asian_low) <= (data['atr'].iloc[-1] * 0.5):
-    signal, color = "⏱️ BE READY: Price Approaching Low Liquidity Zone", "#f59e0b"
-    details = "<b>Strategy Warning:</b> Price is testing lower boundaries (PDL / Asian Low). Prepare for potential sweep reaction."
-
-if is_pdh_sweep and mss_bear and (price < data['ema_50'].iloc[-1]):
-    signal, color = "SELL: Institutional PDH Liquidity Sweep + LTF MSS", "#ef4444"
-    sl, tp = price + (data['atr'].iloc[-1] * 1.5), f"Target Session Low: {asian_low:.2f}"
-    details = f"<b>Execution Reason:</b> High-side liquidity grab at PDH combined with a bearish Market Structure Shift (MSS) under the 50-EMA trend line."
-    log_trade("SELL", price, sl)
-elif is_pdl_sweep and mss_bull and (price > data['ema_50'].iloc[-1]):
-    signal, color = "BUY: Institutional PDL Liquidity Sweep + LTF MSS", "#22c55e"
-    sl, tp = price - (data['atr'].iloc[-1] * 1.5), f"Target Session High: {asian_high:.2f}"
-    details = f"<b>Execution Reason:</b> Low-side liquidity grab at PDL combined with a bullish Market Structure Shift (MSS) above the 50-EMA trend line."
-    log_trade("BUY", price, sl)
-
-# Display Dashboard with IST Timestamp
+# --- UI DISPLAY ---
 st.markdown(f"""
-<div style="background-color: #0f172a; padding: 30px; border-radius: 16px; border-left: 14px solid {color}; color: #f8fafc;">
-    <h1 style="margin:0 0 10px 0; color:{color}; font-size: 1.8rem;">{signal}</h1>
-    <p style="margin:4px 0; color:#94a3b8;"><b>Price:</b> {price:.2f} | <b>ATR:</b> {data['atr'].iloc[-1]:.2f} | <b>Offset:</b> {manual_offset:+.2f}$</p>
-    <p style="margin:0 0 15px 0; color:#cbd5e1; font-size: 0.9rem;">🕒 IST Time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}</p>
-    <p style="margin:12px 0 0 0; font-size: 1.1rem; color:#e2e8f0;">{details}</p>
-    {f'<p style="color:#ff6b6b; margin:10px 0 0 0;"><b>SL:</b> {sl:.2f}</p><p style="color:#51cf66; margin:4px 0 0 0;"><b>TP:</b> {tp}</p>' if sl else ''}
+<div style="background-color: #0f172a; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; color:#f8fafc;">
+    <h3 style="margin:0; color:{color};">{signal_box}</h3>
+    <p style="margin:6px 0;"><b>Price (w/ Offset):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
+    <p style="margin:0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {datetime.now(IST_TZ).strftime('%H:%M:%S')} | Offset Applied: {manual_offset}$</p>
+    {f'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> {sl_val:.2f} | <b>TP:</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''}
 </div>
 """, unsafe_allow_html=True)
 
+# --- JOURNAL ---
 st.markdown("---")
-st.subheader("📅 30-Day Automated Performance Journal")
+st.subheader("📅 30-Day Scalping Journal")
 j_data = load_journal()
-if j_data: st.dataframe(pd.DataFrame(j_data), use_container_width=True)
-else: st.info("No trades logged in the 30-day window yet.")
+if j_data:
+    st.dataframe(pd.DataFrame(j_data), use_container_width=True)
+else:
+    st.info("Awaiting scalp setup...")
     
