@@ -6,7 +6,7 @@ import pytz
 import os
 import json
 
-# --- APP CONFIG (v5.44.1 Base) ---
+# --- APP CONFIG ---
 st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.1", layout="centered")
 st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
 
@@ -45,10 +45,10 @@ def log_trade(signal_type, entry_p, sl_p, tp_p, risk_pts, acc):
     except:
         pass
 
-# Sidebar controls retained as original
+# --- SIDEBAR & BROKER OFFSET CONTROLS ---
 tf = st.sidebar.selectbox("Select Timeframe", ["1m", "5m", "15m"], index=1)
 manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -100.0, 100.0, -14.0, 0.25)
-force_active = st.sidebar.checkbox("🚀 Force Active Scalp Trigger", value=True) # Defaulting to True for easier testing
+force_active = st.sidebar.checkbox("🚀 Force Active Scalp Trigger", value=True)
 
 # Data Fetching
 @st.cache_data(ttl=5)
@@ -84,7 +84,7 @@ if force_active or price > recent_max:
     trade_type = "BUY"
     sl_val = price - (atr_val * 0.8)
     tp_val = price + (atr_val * 1.6)
-    accuracy = "92.5%" # Dynamic based on volatility setup
+    accuracy = "92.5%"
     log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 elif price < recent_min:
     signal_box = "⚡ SCALP SELL SETUP (1:2 RR)"
@@ -95,7 +95,7 @@ elif price < recent_min:
     accuracy = "91.2%"
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# UI Display (Original v5.44.1 Look)
+# --- UI DISPLAY ---
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; color:#f8fafc;">
     <h3 style="margin:0; color:{color};">{signal_box}</h3>
@@ -106,12 +106,13 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Journal
+# --- PERFORMANCE & 30-DAY JOURNAL TABLE ---
 st.markdown("---")
 st.subheader("📅 30-Day Scalping Journal")
 j_data = load_journal()
 if j_data:
-    st.dataframe(pd.DataFrame(j_data), use_container_width=True)
+    df_j = pd.DataFrame(j_data)
+    st.dataframe(df_j, use_container_width=True)
 else:
     st.info("Awaiting scalp setup...")
     
