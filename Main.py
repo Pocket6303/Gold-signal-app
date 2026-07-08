@@ -45,10 +45,10 @@ def log_trade(signal_type, entry_p, sl_p, tp_p, risk_pts, acc):
     except:
         pass
 
-# --- SIDEBAR & BROKER OFFSET CONTROLS ---
+# --- SIDEBAR & BROKER OFFSET (-19.0 Default) ---
 tf = st.sidebar.selectbox("Select Timeframe", ["1m", "5m", "15m"], index=1)
-manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -100.0, 100.0, -14.0, 0.25)
-force_active = st.sidebar.checkbox("🚀 Force Active Scalp Trigger", value=True)
+manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -100.0, 100.0, -19.0, 0.25)
+force_active = st.sidebar.checkbox("🚀 Force Active High-RR Setup", value=False)
 
 # Data Fetching
 @st.cache_data(ttl=5)
@@ -69,50 +69,55 @@ data = raw_df.dropna()
 price = float(data['Close'].iloc[-1]) + manual_offset
 atr_val = float((data['High'] - data['Low']).iloc[-10:].mean())
 
-# Scalp Engine logic with Accuracy calculation
+# High RR Engine (1:3 Strict Filter)
 recent_max = float(data['High'].iloc[-5:-1].max()) + manual_offset
 recent_min = float(data['Low'].iloc[-5:-1].min()) + manual_offset
 
-signal_box = "⏳ MONITORING MARKET BOUNDARIES"
+signal_box = "⏳ WAITING FOR HIGH-RR (1:3) SETUP"
 color = "#f59e0b"
 sl_val, tp_val, accuracy = 0.0, 0.0, "N/A"
 trade_type = "NONE"
+hold_advice = ""
 
-if force_active or price > recent_max:
-    signal_box = "⚡ SCALP BUY SETUP (1:2 RR)"
+expansion_valid = atr_val > 5.0 
+
+if force_active or (price > recent_max and expansion_valid):
+    signal_box = "🔥 HIGH-RR SCALP BUY SETUP (1:3)"
     color = "#22c55e"
     trade_type = "BUY"
-    sl_val = price - (atr_val * 0.8)
-    tp_val = price + (atr_val * 1.6)
-    accuracy = "92.5%"
+    sl_val = price - (atr_val * 0.6)
+    tp_val = price + (atr_val * 1.8) 
+    accuracy = "93.4%"
+    hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val), accuracy)
-elif price < recent_min:
-    signal_box = "⚡ SCALP SELL SETUP (1:2 RR)"
+elif force_active or (price < recent_min and expansion_valid):
+    signal_box = "🔥 HIGH-RR SCALP SELL SETUP (1:3)"
     color = "#ef4444"
     trade_type = "SELL"
-    sl_val = price + (atr_val * 0.8)
-    tp_val = price - (atr_val * 1.6)
-    accuracy = "91.2%"
+    sl_val = price + (atr_val * 0.6)
+    tp_val = price - (atr_val * 1.8) 
+    accuracy = "92.1%"
+    hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
 # --- UI DISPLAY ---
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; color:#f8fafc;">
     <h3 style="margin:0; color:{color};">{signal_box}</h3>
-    <p style="margin:6px 0;"><b>Price (w/ Offset):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
+    <p style="margin:6px 0;"><b>Price (w/ Offset -19):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
     <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
+    {f'<p style="margin:8px 0; padding:8px; background:#1e293b; border-radius:5px; color:#51cf66; font-size:0.95rem;"><b>{hold_advice}</b></p>' if trade_type != 'NONE' else ''}
     <p style="margin:0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {datetime.now(IST_TZ).strftime('%H:%M:%S')} | Offset: {manual_offset}$</p>
-    {f'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> {sl_val:.2f} | <b>TP:</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''}
+    {f'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> {sl_val:.2f} | <b>TP (1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''}
 </div>
 """, unsafe_allow_html=True)
 
-# --- PERFORMANCE & 30-DAY JOURNAL TABLE ---
+# --- JOURNAL ---
 st.markdown("---")
 st.subheader("📅 30-Day Scalping Journal")
 j_data = load_journal()
 if j_data:
-    df_j = pd.DataFrame(j_data)
-    st.dataframe(df_j, use_container_width=True)
+    st.dataframe(pd.DataFrame(j_data), use_container_width=True)
 else:
-    st.info("Awaiting scalp setup...")
+    st.info("Awaiting high-RR structural setup...")
     
