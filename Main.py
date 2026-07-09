@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
@@ -74,7 +74,6 @@ def log_trade(signal_type, entry_p, sl_p, tp_p, risk_pts, acc):
 
 # --- SIDEBAR & BROKER OFFSET ADJUSTMENT ---
 tf = st.sidebar.selectbox("Select Timeframe", ["1m", "5m", "15m"], index=1)
-# Bada slider range taaki aap live broker price se match kar sako (-150 to +150)
 manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -150.0, 150.0, -19.0, 0.25)
 force_active = st.sidebar.checkbox("🚀 Force Active High-RR Setup", value=False)
 
@@ -128,7 +127,7 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- SECURE CONTAINER (Fully Escaped HTML, Zero Leaks) ---
+# --- SECURE CONTAINER ---
 current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
 
 hold_section = f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''
@@ -155,4 +154,4 @@ if j_data:
     st.dataframe(pd.DataFrame(j_data), use_container_width=True)
 else:
     st.info("Awaiting high-RR structural setup...")
-    
+ 
