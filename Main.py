@@ -100,15 +100,17 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- UI DISPLAY ---
+# --- CLEANED UI DISPLAY (Glitch Fixed) ---
+current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
+
 st.markdown(f"""
 <div style="background-color: #0f172a; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; color:#f8fafc;">
     <h3 style="margin:0; color:{color};">{signal_box}</h3>
     <p style="margin:6px 0;"><b>Price (w/ Offset -19):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
     <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
-    {f'<p style="margin:8px 0; padding:8px; background:#1e293b; border-radius:5px; color:#51cf66; font-size:0.95rem;"><b>{hold_advice}</b></p>' if trade_type != 'NONE' else ''}
-    <p style="margin:0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {datetime.now(IST_TZ).strftime('%H:%M:%S')} | Offset: {manual_offset}$</p>
-    {f'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> {sl_val:.2f} | <b>TP (1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''}
+    {'<p style="margin:8px 0; padding:8px; background:#1e293b; border-radius:5px; color:#51cf66; font-size:0.95rem;"><b>' + hold_advice + '</b></p>' if trade_type != 'NONE' else ''}
+    <p style="margin:0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {current_time_str} | Offset: {manual_offset}$</p>
+    {'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> ' + f"{sl_val:.2f}" + ' | <b>TP (1:3 Target):</b> ' + f"{tp_val:.2f}" + '</p>' if trade_type != 'NONE' else ''}
 </div>
 """, unsafe_allow_html=True)
 
