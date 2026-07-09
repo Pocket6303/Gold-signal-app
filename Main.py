@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
@@ -7,7 +7,7 @@ import os
 import json
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.1", layout="centered")
+st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.2", layout="centered")
 
 # --- FORCE DARK THEME CSS INJECTION ---
 st.markdown("""
@@ -35,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏛️ XAUUSD Master Institutional Engine v5.44.1")
+st.title("🏛️ XAUUSD Master Institutional Engine v5.44.2")
 
 JOURNAL_FILE = "smc_gmt4_journey_journal.json"
 IST_TZ = pytz.timezone('Asia/Kolkata')
@@ -72,9 +72,10 @@ def log_trade(signal_type, entry_p, sl_p, tp_p, risk_pts, acc):
     except:
         pass
 
-# --- SIDEBAR & BROKER OFFSET (-19.0 Default) ---
+# --- SIDEBAR & BROKER OFFSET ADJUSTMENT ---
 tf = st.sidebar.selectbox("Select Timeframe", ["1m", "5m", "15m"], index=1)
-manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -100.0, 100.0, -19.0, 0.25)
+# Bada slider range taaki aap live broker price se match kar sako (-150 to +150)
+manual_offset = st.sidebar.slider("Fixed Broker Offset ($)", -150.0, 150.0, -19.0, 0.25)
 force_active = st.sidebar.checkbox("🚀 Force Active High-RR Setup", value=False)
 
 # Data Fetching
@@ -127,7 +128,7 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- SECURE CONTAINER (Fully Escaped HTML) ---
+# --- SECURE CONTAINER (Fully Escaped HTML, Zero Leaks) ---
 current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
 
 hold_section = f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''
@@ -136,7 +137,7 @@ levels_section = f'<hr style="border-color:#334155; margin:12px 0;"><p style="co
 html_content = f"""
 <div class="main-card" style="border-left-color: {box_color};">
     <h3 style="margin:0; color:{box_color};">{signal_box}</h3>
-    <p style="margin:8px 0 4px 0;"><b>Price (w/ Offset -19):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
+    <p style="margin:8px 0 4px 0;"><b>Price (w/ Offset):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
     <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
     {hold_section}
     <p style="margin:4px 0 0 0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {current_time_str} | Offset: {manual_offset}$</p>
