@@ -74,16 +74,14 @@ recent_max = float(data['High'].iloc[-5:-1].max()) + manual_offset
 recent_min = float(data['Low'].iloc[-5:-1].min()) + manual_offset
 
 signal_box = "⏳ WAITING FOR HIGH-RR (1:3) SETUP"
-color = "#f59e0b"
-sl_val, tp_val, accuracy = 0.0, 0.0, "N/A"
 trade_type = "NONE"
 hold_advice = ""
+sl_val, tp_val, accuracy = 0.0, 0.0, "N/A"
 
 expansion_valid = atr_val > 5.0 
 
 if force_active or (price > recent_max and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP BUY SETUP (1:3)"
-    color = "#22c55e"
     trade_type = "BUY"
     sl_val = price - (atr_val * 0.6)
     tp_val = price + (atr_val * 1.8) 
@@ -92,7 +90,6 @@ if force_active or (price > recent_max and expansion_valid):
     log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 elif force_active or (price < recent_min and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP SELL SETUP (1:3)"
-    color = "#ef4444"
     trade_type = "SELL"
     sl_val = price + (atr_val * 0.6)
     tp_val = price - (atr_val * 1.8) 
@@ -100,19 +97,18 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- CLEANED UI DISPLAY (Glitch Fixed) ---
-current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
+# --- NATIVE STREAMLIT UI (No HTML Glitch) ---
+st.subheader(signal_box)
+col1, col2, col3 = st.columns(3)
+col1.metric("Price (w/ Offset -19)", f"{price:.2f}")
+col2.metric("ATR Volatility", f"{atr_val:.2f}")
+col3.metric("Signal Accuracy", accuracy)
 
-st.markdown(f"""
-<div style="background-color: #0f172a; padding: 20px; border-radius: 10px; border-left: 8px solid {color}; color:#f8fafc;">
-    <h3 style="margin:0; color:{color};">{signal_box}</h3>
-    <p style="margin:6px 0;"><b>Price (w/ Offset -19):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
-    <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
-    {'<p style="margin:8px 0; padding:8px; background:#1e293b; border-radius:5px; color:#51cf66; font-size:0.95rem;"><b>' + hold_advice + '</b></p>' if trade_type != 'NONE' else ''}
-    <p style="margin:0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {current_time_str} | Offset: {manual_offset}$</p>
-    {'<hr style="border-color:#334155; margin:10px 0;"><p style="color:#ff6b6b;"><b>SL:</b> ' + f"{sl_val:.2f}" + ' | <b>TP (1:3 Target):</b> ' + f"{tp_val:.2f}" + '</p>' if trade_type != 'NONE' else ''}
-</div>
-""", unsafe_allow_html=True)
+if trade_type != "NONE":
+    st.success(hold_advice)
+    st.warning(f"Stop Loss (SL): {sl_val:.2f} | Take Profit (TP 1:3): {tp_val:.2f}")
+
+st.text(f"🕒 IST Time: {datetime.now(IST_TZ).strftime('%H:%M:%S')} | Offset Applied: {manual_offset}$")
 
 # --- JOURNAL ---
 st.markdown("---")
