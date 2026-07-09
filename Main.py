@@ -7,37 +7,19 @@ import os
 import json
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.4", layout="centered")
+st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.5", layout="centered")
 
-# --- FORCE DARK THEME & PREMIUM CARD CSS INJECTION ---
+# --- CUSTOM CSS FOR CLEAN LOOK ---
 st.markdown("""
 <style>
     .stApp {
         background-color: #0b0f19;
         color: #f8fafc;
     }
-    .main-card {
-        background-color: #0f172a;
-        padding: 24px;
-        border-radius: 14px;
-        border-left: 8px solid #f59e0b;
-        color: #f8fafc;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-        margin-bottom: 20px;
-    }
-    .hold-box {
-        background-color: #1e293b;
-        padding: 12px;
-        border-radius: 8px;
-        color: #51cf66;
-        font-size: 0.95rem;
-        margin: 12px 0;
-        border: 1px solid #334155;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏛️ XAUUSD Master Institutional Engine v5.44.4")
+st.title("🏛️ XAUUSD Master Institutional Engine v5.44.5")
 
 JOURNAL_FILE = "smc_gmt4_journey_journal.json"
 IST_TZ = pytz.timezone('Asia/Kolkata')
@@ -103,7 +85,6 @@ recent_max = float(data['High'].iloc[-5:-1].max()) + manual_offset
 recent_min = float(data['Low'].iloc[-5:-1].min()) + manual_offset
 
 signal_box = "⏳ WAITING FOR HIGH-RR (1:3) SETUP"
-box_color = "#f59e0b"
 trade_type = "NONE"
 hold_advice = ""
 sl_val, tp_val, accuracy = 0.0, 0.0, "N/A"
@@ -112,7 +93,6 @@ expansion_valid = atr_val > 5.0
 
 if force_active or (price > recent_max and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP BUY SETUP (1:3)"
-    box_color = "#22c55e"
     trade_type = "BUY"
     sl_val = price - (atr_val * 0.6)
     tp_val = price + (atr_val * 1.8) 
@@ -121,7 +101,6 @@ if force_active or (price > recent_max and expansion_valid):
     log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 elif force_active or (price < recent_min and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP SELL SETUP (1:3)"
-    box_color = "#ef4444"
     trade_type = "SELL"
     sl_val = price + (atr_val * 0.6)
     tp_val = price - (atr_val * 1.8) 
@@ -129,24 +108,26 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- PREMIUM CARD INTERFACE (Clean HTML Injection) ---
+# --- NATIVE STREAMLIT DASHBOARD CARD (No HTML Leaks) ---
+st.markdown(f"### {signal_box}")
+col1, col2 = st.columns(2)
+with col1:
+    st.metric(label="Price (w/ Offset)", value=f"{price:.2f}")
+with col2:
+    st.metric(label="ATR Volatility", value=f"{atr_val:.2f}")
+
+st.info(f"**Signal Accuracy:** {accuracy}")
+
+if trade_type != 'NONE':
+    st.success(hold_advice)
+    c_sl, c_tp = st.columns(2)
+    with c_sl:
+        st.error(f"**Stop Loss (SL):** {sl_val:.2f}")
+    with c_tp:
+        st.success(f"**Take Profit (TP 1:3):** {tp_val:.2f}")
+
 current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
-
-hold_section = f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''
-levels_section = f'<hr style="border-color:#334155; margin:14px 0;"><p style="color:#ff6b6b; margin:3px 0;"><b>Stop Loss (SL):</b> {sl_val:.2f}</p><p style="color:#51cf66; margin:3px 0;"><b>Take Profit (TP 1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''
-
-card_html = f"""
-<div class="main-card" style="border-left-color: {box_color};">
-    <h3 style="margin:0 0 10px 0; color:{box_color}; font-size: 1.4rem;">{signal_box}</h3>
-    <div style="font-size: 1rem; margin-bottom: 6px;"><b>Price (w/ Offset):</b> {price:.2f} &nbsp;|&nbsp; <b>ATR:</b> {atr_val:.2f}</div>
-    <div style="font-size: 0.95rem; color:#38bdf8; margin-bottom: 6px;"><b>Signal Accuracy:</b> {accuracy}</div>
-    {hold_section}
-    <div style="font-size: 0.85rem; color:#94a3b8; margin-top: 8px;">🕒 IST Time: {current_time_str} &nbsp;|&nbsp; Offset Applied: {manual_offset}$</div>
-    {levels_section}
-</div>
-"""
-
-st.markdown(card_html, unsafe_allow_html=True)
+st.caption(f"🕒 IST Time: {current_time_str} | Offset Applied: {manual_offset}$")
 
 # --- JOURNAL ---
 st.markdown("---")
