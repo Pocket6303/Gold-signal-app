@@ -7,7 +7,7 @@ import os
 import json
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.2", layout="centered")
+st.set_page_config(page_title="XAUUSD Master Institutional Engine v5.44.3", layout="centered")
 
 # --- FORCE DARK THEME CSS INJECTION ---
 st.markdown("""
@@ -16,26 +16,10 @@ st.markdown("""
         background-color: #0b0f19;
         color: #f8fafc;
     }
-    .main-card {
-        background-color: #0f172a;
-        padding: 22px;
-        border-radius: 12px;
-        border-left: 8px solid #f59e0b;
-        color: #f8fafc;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-    }
-    .hold-box {
-        background-color: #1e293b;
-        padding: 10px;
-        border-radius: 6px;
-        color: #51cf66;
-        font-size: 0.95rem;
-        margin: 10px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏛️ XAUUSD Master Institutional Engine v5.44.2")
+st.title("🏛️ XAUUSD Master Institutional Engine v5.44.3")
 
 JOURNAL_FILE = "smc_gmt4_journey_journal.json"
 IST_TZ = pytz.timezone('Asia/Kolkata')
@@ -101,7 +85,6 @@ recent_max = float(data['High'].iloc[-5:-1].max()) + manual_offset
 recent_min = float(data['Low'].iloc[-5:-1].min()) + manual_offset
 
 signal_box = "⏳ WAITING FOR HIGH-RR (1:3) SETUP"
-box_color = "#f59e0b"
 trade_type = "NONE"
 hold_advice = ""
 sl_val, tp_val, accuracy = 0.0, 0.0, "N/A"
@@ -110,7 +93,6 @@ expansion_valid = atr_val > 5.0
 
 if force_active or (price > recent_max and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP BUY SETUP (1:3)"
-    box_color = "#22c55e"
     trade_type = "BUY"
     sl_val = price - (atr_val * 0.6)
     tp_val = price + (atr_val * 1.8) 
@@ -119,7 +101,6 @@ if force_active or (price > recent_max and expansion_valid):
     log_trade("BUY", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 elif force_active or (price < recent_min and expansion_valid):
     signal_box = "🔥 HIGH-RR SCALP SELL SETUP (1:3)"
-    box_color = "#ef4444"
     trade_type = "SELL"
     sl_val = price + (atr_val * 0.6)
     tp_val = price - (atr_val * 1.8) 
@@ -127,24 +108,18 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- SECURE CONTAINER ---
+# --- NATIVE STREAMLIT UI (Zero HTML Leaks) ---
+st.subheader(signal_box)
+st.write(f"**Price (w/ Offset):** {price:.2f} | **ATR:** {atr_val:.2f}")
+st.write(f"**Signal Accuracy:** {accuracy}")
+
+if trade_type != 'NONE':
+    st.success(hold_advice)
+    st.error(f"Stop Loss (SL): {sl_val:.2f}")
+    st.success(f"Take Profit (TP 1:3 Target): {tp_val:.2f}")
+
 current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
-
-hold_section = f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''
-levels_section = f'<hr style="border-color:#334155; margin:12px 0;"><p style="color:#ff6b6b; margin:2px 0;"><b>SL:</b> {sl_val:.2f}</p><p style="color:#51cf66; margin:2px 0;"><b>TP (1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''
-
-html_content = f"""
-<div class="main-card" style="border-left-color: {box_color};">
-    <h3 style="margin:0; color:{box_color};">{signal_box}</h3>
-    <p style="margin:8px 0 4px 0;"><b>Price (w/ Offset):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
-    <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
-    {hold_section}
-    <p style="margin:4px 0 0 0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {current_time_str} | Offset: {manual_offset}$</p>
-    {levels_section}
-</div>
-"""
-
-st.markdown(html_content, unsafe_allow_html=True)
+st.caption(f"🕒 IST: {current_time_str} | Offset Applied: {manual_offset}$")
 
 # --- JOURNAL ---
 st.markdown("---")
@@ -154,4 +129,4 @@ if j_data:
     st.dataframe(pd.DataFrame(j_data), use_container_width=True)
 else:
     st.info("Awaiting high-RR structural setup...")
- 
+    
