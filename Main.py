@@ -24,14 +24,6 @@ st.markdown("""
         color: #f8fafc;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
-    .metric-container {
-        background-color: #1e293b;
-        padding: 12px;
-        border-radius: 8px;
-        text-align: center;
-        color: #f8fafc;
-        margin: 5px 0;
-    }
     .hold-box {
         background-color: #1e293b;
         padding: 10px;
@@ -135,19 +127,24 @@ elif force_active or (price < recent_min and expansion_valid):
     hold_advice = "💎 MOMENTUM STRONG: Don't Exit! Hold & Ride to TP."
     log_trade("SELL", price, sl_val, tp_val, abs(price - sl_val), accuracy)
 
-# --- SECURE DARK UI CARD (No Tag Leaks) ---
+# --- SECURE CONTAINER (Fully Escaped HTML) ---
 current_time_str = datetime.now(IST_TZ).strftime('%H:%M:%S')
 
-st.markdown(f"""
+hold_section = f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''
+levels_section = f'<hr style="border-color:#334155; margin:12px 0;"><p style="color:#ff6b6b; margin:2px 0;"><b>SL:</b> {sl_val:.2f}</p><p style="color:#51cf66; margin:2px 0;"><b>TP (1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''
+
+html_content = f"""
 <div class="main-card" style="border-left-color: {box_color};">
     <h3 style="margin:0; color:{box_color};">{signal_box}</h3>
     <p style="margin:8px 0 4px 0;"><b>Price (w/ Offset -19):</b> {price:.2f} | <b>ATR:</b> {atr_val:.2f}</p>
     <p style="margin:0; font-size:0.9rem; color:#38bdf8;"><b>Signal Accuracy: {accuracy}</b></p>
-    {f'<div class="hold-box"><b>{hold_advice}</b></div>' if trade_type != 'NONE' else ''}
+    {hold_section}
     <p style="margin:4px 0 0 0; font-size:0.85rem; color:#94a3b8;">🕒 IST: {current_time_str} | Offset: {manual_offset}$</p>
-    {f'<hr style="border-color:#334155; margin:12px 0;"><p style="color:#ff6b6b; margin:2px 0;"><b>SL:</b> {sl_val:.2f}</p><p style="color:#51cf66; margin:2px 0;"><b>TP (1:3 Target):</b> {tp_val:.2f}</p>' if trade_type != 'NONE' else ''}
+    {levels_section}
 </div>
-""", unsafe_allow_html=True)
+"""
+
+st.markdown(html_content, unsafe_allow_html=True)
 
 # --- JOURNAL ---
 st.markdown("---")
@@ -157,3 +154,4 @@ if j_data:
     st.dataframe(pd.DataFrame(j_data), use_container_width=True)
 else:
     st.info("Awaiting high-RR structural setup...")
+    
